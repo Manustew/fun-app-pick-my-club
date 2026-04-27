@@ -15,23 +15,52 @@ const PUB_BACKGROUND_STYLE: React.CSSProperties = {
   ].join(", "),
 };
 
+const NEXT_BUTTON_STYLE: React.CSSProperties = {
+  backgroundImage:
+    "linear-gradient(180deg, #f0d28a 0%, #d4a956 45%, #a87a30 100%)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,240,200,0.7), inset 0 -2px 4px rgba(0,0,0,0.35), 0 6px 18px rgba(0,0,0,0.55), 0 0 0 1px rgba(80,50,15,0.6)",
+};
+
 export default function QuizPage() {
   const router = useRouter();
-  const [picked, setPicked] = useState<number[]>([]);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [picked, setPicked] = useState<(number | null)[]>(() =>
+    Array(questions.length).fill(null),
+  );
 
-  const currentIndex = picked.length;
   const current = questions[currentIndex];
+  const selectedAnswer = current ? picked[currentIndex] : null;
+  const isFirstQuestion = currentIndex === 0;
+  const isLastQuestion = currentIndex === questions.length - 1;
+  const canAdvance = selectedAnswer !== null;
 
   function selectAnswer(answerIndex: number) {
-    const next = [...picked, answerIndex];
-    if (next.length >= questions.length) {
-      router.push(`/quiz/result?a=${next.join(",")}`);
-    } else {
-      setPicked(next);
+    setPicked((prev) => {
+      const next = [...prev];
+      next[currentIndex] = answerIndex;
+      return next;
+    });
+  }
+
+  function goBack() {
+    if (!isFirstQuestion) {
+      setCurrentIndex((i) => i - 1);
     }
   }
 
-  // Guard: if there are zero questions, fall through with a friendly message.
+  function goForward() {
+    if (!canAdvance) return;
+    if (isLastQuestion) {
+      // All earlier answers are guaranteed non-null because the user had to
+      // advance through each one to reach the last question.
+      const completed = picked as number[];
+      router.push(`/quiz/result?a=${completed.join(",")}`);
+    } else {
+      setCurrentIndex((i) => i + 1);
+    }
+  }
+
   if (!current) {
     return (
       <div className="relative flex flex-1 flex-col" style={PUB_BACKGROUND_STYLE}>
@@ -103,29 +132,84 @@ export default function QuizPage() {
         </h1>
 
         {/* Answers */}
-        <div className="flex flex-col gap-3 sm:gap-4">
-          {current.answers.map((answer, i) => (
-            <button
-              key={`${current.id}-${i}`}
-              type="button"
-              onClick={() => selectAnswer(i)}
-              className="group w-full rounded-[3px] border border-[#c9a961]/30 bg-[#3a2316]/60 px-5 py-4 text-left font-serif text-base text-[#f4ead5] backdrop-blur-sm transition-colors hover:border-[#c9a961] hover:bg-[#4a2e1a]/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f4ead5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2a1810] sm:text-lg"
-              style={{
-                boxShadow:
-                  "inset 0 1px 0 rgba(255,240,200,0.08), 0 4px 12px rgba(0,0,0,0.35)",
-              }}
-            >
-              <span className="flex items-center gap-4">
-                <span
-                  className="font-display text-sm font-bold tracking-wider text-[#c9a961] transition-colors group-hover:text-[#f0d28a]"
-                  aria-hidden
-                >
-                  {String.fromCharCode(65 + i)}
+        <div
+          role="radiogroup"
+          aria-label={current.text}
+          className="flex flex-col gap-3 sm:gap-4"
+        >
+          {current.answers.map((answer, i) => {
+            const isSelected = selectedAnswer === i;
+            return (
+              <button
+                key={`${current.id}-${i}`}
+                type="button"
+                role="radio"
+                aria-checked={isSelected}
+                onClick={() => selectAnswer(i)}
+                className={[
+                  "group w-full rounded-[3px] border px-5 py-4 text-left font-serif text-base text-[#f4ead5] backdrop-blur-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f4ead5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2a1810] sm:text-lg",
+                  isSelected
+                    ? "border-[#c9a961] bg-[#4a2e1a]/85"
+                    : "border-[#c9a961]/30 bg-[#3a2316]/60 hover:border-[#c9a961] hover:bg-[#4a2e1a]/80",
+                ].join(" ")}
+                style={{
+                  boxShadow: isSelected
+                    ? "inset 0 1px 0 rgba(255,240,200,0.18), inset 0 0 0 1px rgba(201,169,97,0.55), 0 6px 18px rgba(0,0,0,0.45)"
+                    : "inset 0 1px 0 rgba(255,240,200,0.08), 0 4px 12px rgba(0,0,0,0.35)",
+                }}
+              >
+                <span className="flex items-center gap-4">
+                  <span
+                    className={[
+                      "font-display text-sm font-bold tracking-wider transition-colors",
+                      isSelected
+                        ? "text-[#f0d28a]"
+                        : "text-[#c9a961] group-hover:text-[#f0d28a]",
+                    ].join(" ")}
+                    aria-hidden
+                  >
+                    {String.fromCharCode(65 + i)}
+                  </span>
+                  <span className="flex-1">{answer.text}</span>
                 </span>
-                <span className="flex-1">{answer.text}</span>
-              </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer: Back / Next */}
+        <div
+          className={`flex items-center gap-4 ${
+            isFirstQuestion ? "justify-end" : "justify-between"
+          }`}
+        >
+          {!isFirstQuestion && (
+            <button
+              type="button"
+              onClick={goBack}
+              className="inline-flex items-center gap-1 font-serif text-sm text-[#c9a961]/80 underline-offset-4 transition-colors hover:text-[#c9a961] hover:underline focus-visible:underline focus-visible:outline-none"
+            >
+              <span aria-hidden>&larr;</span>
+              Back
             </button>
-          ))}
+          )}
+
+          <button
+            type="button"
+            onClick={goForward}
+            disabled={!canAdvance}
+            aria-disabled={!canAdvance}
+            className="group inline-flex items-center gap-2 rounded-[2px] px-7 py-3 font-display text-base font-semibold tracking-wide text-[#2a1810] transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#f4ead5] focus-visible:ring-offset-2 focus-visible:ring-offset-[#2a1810] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:translate-y-0 sm:text-lg"
+            style={NEXT_BUTTON_STYLE}
+          >
+            {isLastQuestion ? "See my result" : "Next"}
+            <span
+              aria-hidden
+              className="transition-transform group-hover:translate-x-1 group-disabled:translate-x-0"
+            >
+              &rarr;
+            </span>
+          </button>
         </div>
       </main>
     </div>
